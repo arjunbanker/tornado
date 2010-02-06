@@ -37,7 +37,7 @@ class GoogleHandler(tornado.web.RequestHandler, tornado.auth.GoogleMixin):
             self.get_authenticated_user(self.async_callback(self._on_auth))
             return
         self.authenticate_redirect()
-    
+
     def _on_auth(self, user):
         if not user:
             raise tornado.web.HTTPError(500, "Google auth failed")
@@ -99,9 +99,9 @@ class OpenIdMixin(object):
         url = urlparse.urljoin(self.request.full_url(), callback_uri)
         args = {
             "openid.ns": "http://specs.openid.net/auth/2.0",
-            "openid.claimed_id": 
+            "openid.claimed_id":
                 "http://specs.openid.net/auth/2.0/identifier_select",
-            "openid.identity": 
+            "openid.identity":
                 "http://specs.openid.net/auth/2.0/identifier_select",
             "openid.return_to": url,
             "openid.realm": "http://" + self.request.host + "/",
@@ -330,6 +330,62 @@ class OAuthMixin(object):
         base_args["oauth_signature"] = signature
         return base_args
 
+class WrapMixin:
+    """Abstract implementation of OAuthWrap
+    """
+    def authorize_redirect(self, callback_uri=None):
+        self.require_setting("wrap_client_id", "WRAP Client ID")
+        self.require_setting("wrap_client_secret", "WRAP Client Secret")
+        self.require_setting("wrap_callback", "Callback URL")
+        args = dict(
+            wrap_client_id=self.settings["wrap_client_id"],
+            wrap_client_secret=self.settings["wrap_client_secret"],
+            wrap_callback=self.settings["wrap_callback"],
+            wrap_scope="read_stream,publish_stream"
+        )
+        url = self._WRAP_AUTHORIZE_URL + "?" + urllib.urlencode(args)
+        self.redirect(url)
+
+    def get_access_token(self, callback):
+        """Gets the OAuth-WRAP authorized user and access token on callback.
+        """
+        http = httpclient.AsyncHTTPClient()
+        args = dict(
+            wrap_client_id=self.settings["wrap_client_id"],
+            wrap_client_secret=self.settings["wrap_client_secret"],
+            wrap_callback=self.settings["wrap_callback"],
+            wrap_verification_code=self.get_argument("wrap_verification_code"),
+            wrap_scope="read_stream,publish_stream"
+        )
+        url = self._WRAP_ACCESS_TOKEN_URL + "?" + urllib.urlencode(args)
+        http.fetch(url, self.async_callback(
+            self._on_access_token, callback))
+
+    def _on_access_token(self, callback, response):
+        p = cgi.parse_qs(response.body, keep_blank_values=False)
+        callback(p)
+
+    def get_authenticated_user(self, callback):
+        return
+
+
+class FacebookWrapMixin(WrapMixin):
+    """Facebook OAuth-WRAP authentication
+
+    """
+
+    _WRAP_AUTHORIZE_URL = "http://graph.abanker4.devrs006.facebook.com/oauth/authorize"
+    _WRAP_ACCESS_TOKEN_URL = "http://graph.abanker4.devrs006.facebook.com/oauth/access_token"
+
+    _FACEBOOK_API_URL = "http://graph.abanker4.devrs006.facebook.com/"
+
+    def getPath(self, path, callback, access_token, args=dict()):
+        http = httpclient.AsyncHTTPClient()
+        url = self._FACEBOOK_API_URL + path
+        args["wrap_access_token"] = access_token
+        url = url + "?" + urllib.urlencode(args)
+        http.fetch(url, self.async_callback(callback))
+
 
 class TwitterMixin(OAuthMixin):
     """Twitter OAuth authentication.
@@ -351,7 +407,7 @@ class TwitterMixin(OAuthMixin):
                 self.get_authenticated_user(self.async_callback(self._on_auth))
                 return
             self.authorize_redirect()
-    
+
         def _on_auth(self, user):
             if not user:
                 raise tornado.web.HTTPError(500, "Twitter auth failed")
@@ -438,7 +494,7 @@ class TwitterMixin(OAuthMixin):
                        callback=callback)
         else:
             http.fetch(url, callback=callback)
-    
+
     def _on_twitter_request(self, callback, response):
         if response.error:
             logging.warning("Error response %s fetching %s", response.error,
@@ -487,7 +543,7 @@ class FriendFeedMixin(OAuthMixin):
                 self.get_authenticated_user(self.async_callback(self._on_auth))
                 return
             self.authorize_redirect()
-    
+
         def _on_auth(self, user):
             if not user:
                 raise tornado.web.HTTPError(500, "FriendFeed auth failed")
@@ -558,7 +614,7 @@ class FriendFeedMixin(OAuthMixin):
                        callback=callback)
         else:
             http.fetch(url, callback=callback)
-    
+
     def _on_friendfeed_request(self, callback, response):
         if response.error:
             logging.warning("Error response %s fetching %s", response.error,
@@ -604,7 +660,7 @@ class GoogleMixin(OpenIdMixin, OAuthMixin):
                self.get_authenticated_user(self.async_callback(self._on_auth))
                return
         self.authenticate_redirect()
-    
+
         def _on_auth(self, user):
             if not user:
                 raise tornado.web.HTTPError(500, "Google auth failed")
@@ -680,7 +736,7 @@ class FacebookMixin(object):
                 self.get_authenticated_user(self.async_callback(self._on_auth))
                 return
             self.authenticate_redirect()
-    
+
         def _on_auth(self, user):
             if not user:
                 raise tornado.web.HTTPError(500, "Facebook auth failed")

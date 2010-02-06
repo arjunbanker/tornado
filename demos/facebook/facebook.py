@@ -87,7 +87,7 @@ class AuthLoginHandler(BaseHandler, tornado.auth.FacebookMixin):
             self.get_authenticated_user(self.async_callback(self._on_auth))
             return
         self.authorize_redirect("read_stream")
-    
+
     def _on_auth(self, user):
         if not user:
             raise tornado.web.HTTPError(500, "Facebook auth failed")
